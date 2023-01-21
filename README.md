@@ -1,1 +1,1 @@
-# Hierarchical Tables in SQL
+# Hierarchical Tables in PostgreSQL
