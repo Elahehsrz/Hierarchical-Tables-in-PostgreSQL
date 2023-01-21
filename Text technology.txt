@@ -1,0 +1,379 @@
+Hierarchical Tables in SQL
+Text Technology - Research Project
+
+
+******************************************
+
+2. Transformation of the Tagset into a Hierarchical Table
+• Technologies Used : PostgreSQL/XML/XPath
+• Technological Extension : Hierarchical Tables in PostgreSQL
+
+******************************************
+3. Table Creation
+
+
+Table creation:
+
+	CREATE TABLE menu(
+	id INTEGER,
+	parent_id INTEGER,
+	food varchar(20),    
+	parent varchar(20));
+	
+
+Values Insertion:
+
+	INSERT INTO menu (id, food, parent, parent_id ) VALUES
+	(1, 'Vegetarian_Recipes', NULL,  NULL),
+	(2, 'Fruits', 'Vegetarian_Recipes', 1 ),
+	(3, 'Soup', 'Vegetarian_Recipes', 1),
+	(4, 'Dry_Fruits', 'Fruits', 2),
+	(5, 'Fresh_Fruits', 'Fruits', 2),
+	(6, 'Tomato_Soup', 'Soup', 3),
+	(7, 'Loaded_potato_Soup', 'Soup', 3),
+	(8, 'French_onion_soup', 'Soup', 3),  
+	(9, 'Almond', 'Dry_Fruits', 4 ),
+	(10, 'Apricot', 'Dry_Fruits', 4),
+	(11, 'Cashew_Nuts', 'Dry_Fruits', 4),
+	(12, 'Dates', 'Dry_Fruits', 4),
+	(13, 'Walnuts', 'Dry_Fruits', 4),
+	(14, 'Peanuts', 'Dry_Fruits', 4),
+	(15, 'Pistachios', 'Dry_Fruits', 4),
+	(16, 'Apple', 'Fresh_Fruits', 5),
+	(17, 'Banana', 'Fresh_Fruits', 5),
+	(18, 'Orange', 'Fresh_Fruits', 5),
+	(19, 'Mango', 'Fresh_Fruits', 5),
+	(20, 'Grapes', 'Fresh_Fruits', 5);
+	
+
+Display the Table:
+
+	SELECT * FROM menu;
+	
+	
+Finding the Root Node:
+	SELECT * FROM menu WHERE parent_id IS NULL;
+	SELECT * FROM menu WHERE parent  IS NULL;
+	
+
+Finding Leaf Nodes:
+	SELECT *
+	FROM menu AS m1
+	WHERE NOT EXISTS (SELECT *
+	FROM menu AS m2
+	WHERE m1.id = m2.parent_id);
+	
+Finding Levels in a Tree:
+
+	WITH RECURSIVE parents AS 
+	(
+	SELECT
+	id                  AS id,
+	0                   AS number_of_ancestors,
+	ARRAY [id]          AS ancestry,
+	NULL :: INTEGER     AS parent_id,
+	id                  AS start_of_ancestry,
+	food :: VARCHAR     AS food_name,
+	parent :: VARCHAR   AS parent_name
+	
+	FROM recipes1 
+	WHERE
+	parent_id IS NULL
+	UNION
+	SELECT
+	child.id                                                         AS id,
+	p.number_of_ancestors +1                                         AS ancestry_size,
+	array_append(p.ancestry, child.id)                               AS ancestry,
+	child.parent_id                                                  AS parent_id,
+	coalesce(p.start_of_ancestry, child.parent_id)                   AS start_of_ancestry,
+	food                                                             As food_name,
+	parent                                                           AS parent_name
+	
+	FROM menu child
+	INNER JOIN parents p ON p.id = child.parent_id
+	)
+	SELECT
+	id,
+	number_of_ancestors,
+	ancestry,
+	parent_id,
+	start_of_ancestry,
+	Food_name,
+	parent_name
+	FROM parents;
+
+
+Finding Levels in a Tree:
+
+	SELECT m1.food AS lev1, m2.food as lev2, m3.food as lev3, m4.food as lev4
+	FROM menu AS m1
+	LEFT JOIN menu AS m2 ON m2.parent_id = m1.id
+	LEFT JOIN menu AS m3 ON m3.parent_id = m2.id
+	LEFT JOIN menu AS m4 ON m4.parent_id = m3.id
+	WHERE m1.food = 'Vegetarian_Recipes';
+	
+	
+******************************************	
+Subtree Extraction
+
+Finding All Children of a Specific Food in the Menu:
+
+	WITH RECURSIVE
+	starting (id, food, parent_id) AS
+	(SELECT m.id, m.food, m.parent_id
+	FROM menu AS m
+	WHERE m.food = 'Fruits'),
+	descendants (id, food, parent_id) AS
+	(SELECT s.id, s.food, s.parent_id
+	FROM starting AS s
+	UNION ALL
+	SELECT m.id, m.food, m.parent_id
+	FROM menu AS m JOIN descendants AS d ON m.parent_id = d.id)
+	Table descendants;
+
+
+Retrieving a Single Path
+
+	SELECT m1.food AS lev1, m2.food as lev2, m3.food as lev3, m4.food as lev4
+	FROM menu AS m1
+	LEFT JOIN menu AS m2 ON m2.parent_id = m1.id
+	LEFT JOIN menu AS m3 ON m3.parent_id = m2.id
+	LEFT JOIN menu AS m4 ON m4.parent_id = m3.id
+	WHERE m1.food = 'Vegetarian_Recipes' and m4.food= 'Mango';
+
+
+Finding the Upper Level of a Subcategory in the Menu
+
+	SELECT food, id, parent_id, parent FROM menu  WHERE food= 'Dates';
+	SELECT food, id, parent_id, parent FROM menu WHERE id = 12;
+	
+
+How Many Kinds of Foods Do We Have in Each Category?
+
+	SELECT count(*) FROM menu WHERE parent_id = 3;
+
+	SELECT count(*) FROM menu WHERE parent = 'Dry_Fruits';
+
+******************************************		
+5. XML Encoding
+ 
+ 
+Table to XML:
+ 
+   	SELECT table_to_xml('menu', true, false, '');
+
+
+Queries to XML:
+
+	SELECT query_to_xml('SELECT * FROM menu where parent_id=3', true, false, '');
+	
+	SELECT query_to_xml('SELECT * FROM menu where id = 3', true, false, '');
+
+	SELECT query_to_xml('SELECT * FROM menu where parent= ''Soup'' ' , true, false, '');
+	
+******************************************	
+6. Access
+
+XPath Queries
+
+Find Ids For All Available Food  in the Menu	
+	/menu/row/id
+	
+	
+Find Two Main Kinds of Food with Several Subcategories	
+
+	/menu/row[parent_id<2]
+	
+	
+Find a Food with One or More Subcategories
+	
+	/menu/row/parent
+	
+	
+Find Children Nodes for 'Fruits'
+
+	/menu/row[parent='Fruits']
+	
+******************************************	
+7. Table Creation Using ltree Extension
+
+Testing Whether The LTREE Extension Is Installed:
+
+	create extension ltree;
+	CREATE EXTENSION
+	
+		
+Saving a Tree in Postgres Using LTREE:
+
+	CREATE TABLE menu1 (
+	id serial primary key,
+	food varchar(20),    
+	path ltree );
+	create index menu1_path_idx on menu1 using gist (path);
+	
+
+Values Insertion:
+
+	insert into menu1 (food, path) values ('Vegetarian_Recipes', 'Vegetarian_Recipes');
+	insert into menu1 (food, path) values ('Soup', 'Vegetarian_Recipes.Soup');
+	insert into menu1 (food, path) values ('Fruits', 'Vegetarian_Recipes.Fruits');
+	insert into menu1 (food, path) values ('French_Onion_Soup', 'Vegetarian_Recipes.Soup.French_Onion_Soup');
+	insert into menu1 (food, path) values ('Loaded_Potato_Soup', 'Vegetarian_Recipes.Soup.Loaded_Potato_Soup');
+	insert into menu1 (food, path) values ('Tomato_Soup', 'Vegetarian_Recipes.Soup.Tomato_Soup');
+	insert into menu1 (food, path) values ('Dry_Fruits', 'Vegetarian_Recipes.Fruits.Dry_Fruits');
+	insert into menu1 (food, path) values ('Fresh_Fruits', 'Vegetarian_Recipes.Fruits.Fresh_Fruits');
+	insert into menu1 (food, path) values ('Fruits_Vegetables', 'Vegetarian_Recipes.Fruits.Fruits_Vegetables');
+	insert into menu1 (food, path) values ('Apple', 'Vegetarian_Recipes.Fruits.Fresh_Fruits.Apple');
+	insert into menu1 (food, path) values ('Banana', 'Vegetarian_Recipes.Fruits.Fresh_Fruits.Banana');
+	insert into menu1 (food, path) values ('Orange', 'Vegetarian_Recipes.Fruits.Fresh_Fruits.Orange');
+	insert into menu1 (food, path) values ('Mango', 'Vegetarian_Recipes.Fruits.Fresh_Fruits.Mango');
+	insert into menu1 (food, path) values ('Grapes', 'Vegetarian_Recipes.Fruits.Fresh_Fruits.Grapes');
+	insert into menu1 (food, path) values ('Almond', 'Vegetarian_Recipes.Fruits.Dry_Fruits.Almond');
+	insert into menu1 (food, path) values ('Apricot', 'Vegetarian_Recipes.Fruits.Dry_Fruits.Apricot');
+	insert into menu1 (food, path) values ('Cashew_Nuts', 'Vegetarian_Recipes.Fruits.Dry_Fruits.Cashew_Nuts');
+	insert into menu1 (food, path) values ('Dates', 'Vegetarian_Recipes.Fruits.Dry_Fruits.Dates');
+	insert into menu1 (food, path) values ('Walnuts', 'Vegetarian_Recipes.Fruits.Dry_Fruits.Walnuts');
+	insert into menu1 (food, path) values ('Peanuts', 'Vegetarian_Recipes.Fruits.Dry_Fruits.Peanuts');
+	insert into menu1 (food, path) values 
+	('Pistachios', 'Vegetarian_Recipes.Fruits.Dry_Fruits.Pistachios');
+	insert into menu1 (food, path) values 
+	('Beet_Apple_Carrot_Ginger', 'Vegetarian_Recipes.Fruits.Fruits_Vegetables.Beet_Apple_Carrot_Ginger');
+	insert into menu1 (food, path) values
+	('Pineapple_Lime_Ginger', 'Vegetarian_Recipes.Fruits.Fruits_Vegetables.Pineapple_Lime_Ginger');
+	insert into menu1 (food, path) values 
+	('Fresh_Tomato_Apple', 'Vegetarian_Recipes.Fruits.Fruits_Vegetables.Fresh_Tomato_Apple');
+	insert into menu1 (food, path) values 
+	('Ginger_Pumpkin_Bisque', 'Vegetarian_Recipes.Fruits.Fruits_Vegetables.Ginger_Pumpkin_Bisque');
+	insert into menu1 (food, path) values 
+	('Sweet_Potato_Figs', 'Vegetarian_Recipes.Fruits.Fruits_Vegetables.Sweet_Potato_Figs');
+	
+
+Display the Table:
+
+	select * from menu1;	
+	
+******************************************	
+8. Doing Some queries Using ltree Extension:
+
+	SELECT path FROM menu1 WHERE path <@ 'Vegetarian_Recipes.Fruits';
+	
+
+Extracting the List of Soup Available in the Menu:
+
+	SELECT path FROM menu1 WHERE path ~ '*.Soup.*';
+
+
+******************************************	
+9. More Operations on Tables
+
+Finding Levels in the Tree:
+
+	select food, path, nlevel(path) from menu1;
+
+	
+Return a Selected Substring From a Given Path:
+
+	select food, subpath(path, 1) from menu1 where path <@
+	'Vegetarian_Recipes.Fruits.Fresh_Fruits';
+
+
+Cutting Off a Branch
+E.g. To delete "Pistachios" from the table:
+
+	delete from menu1 where 'Vegetarian_Recipes.Fruits.Dry_Fruits.Pistachios' @> path;
+
+
+Insert The Deleted Item Again:
+
+	insert into menu1 (food, path) values
+	('Vegetarian_Recipes','Vegetarian_Recipes.Fruits.Dry_Fruits.Pistachios');
+	
+	
+Moving a subtree within a tree:
+Moving Selected Tree Nodes
+When food = 'Fruits\_Vegetables':
+
+	Update menu1 set path = subpath(path, nlevel('Vegetarian_Recipes.Fruits.Fruits_Vegetables')-1) where path <@
+	'Vegetarian_Recipes.Fruits.Fruits_Vegetables';
+	select * from menu1;
+	
+	
+	select 'Vegetarian_Recipes.Soup' || path as concatenated from menu1 where path <@ 'Fruits_Vegetables';
+
+	
+Created table after moving:
+	
+	update menu1  set path = 'Vegetarian_Recipes.Soup' || subpath(path, nlevel('Fruits_Vegetables')-1)
+	where path <@ 'Fruits_Vegetables'; 
+	
+
+******************************************		
+10. References
+
+[1] Celko, Joe. Joe Celko’s Trees and hierarchies in SQL for smarties. Elsevier, 2012.
+
+[2] Györödi, Cornelia, Romulus-Radu Moldovan-Dus , e, Robert Győrödi, and George Pecherle. “Improve Query Performance
+On Hierarchical Data. Adjacency List Model Vs. Nested Set Model.” International Journal of Advanced Computer
+Science and Applications (2016): 272-278.
+
+[3] Samokhvalov, Nikolay. “XML support in PostgreSQL.” In CEUR Workshop Proceedings. 2007.
+
+[4] “Adjacency list Model”. Wikipedia.
+https://en.wikipedia.org/wiki/Adjacency_list
+(retrieved 04/01/2021)
+
+[5] “An example of creating a recursive postgresql query to generate data about parent-child relationships within a single
+table”. Postgresql recursive.sql. Github repository.
+https://gist.github.com/dankrause/76baa0ad73ff19fd39e861600c56a15d
+(retrieved 25/12/2020)
+
+[6] “AngularJS-Tree. Github repository.
+https://github.com/AmitThakkar/AngularJS-Tree
+(image retrieved 20/12/2020)
+
+[7] “F.21. ltree”. Documentation /PostgreSQL13.
+https://www.postgresql.org/docs/current/ltree.html
+(retrieved 07/02/2021)
+
+[8] “Get all parents and all children in one statement”. Stackexchange.
+https://dba.stackexchange.com/questions/175868/cte-get-all-parents-and-all-children-in-one-statemen
+(retrieved 15/01/2021)
+
+[9] “Getting list of all children from adjacency tree”.
+https://wiki.postgresql.org/wiki/Getting_list_of_all_children_from_adjacency_tree
+(retrieved 27/12/2020)
+
+[10] “Hierarchical data in postgres”. Coderwall.
+https://coderwall.com/p/whf3-a/hierarchical-data-in-postgres
+(retrieved 07/01/2021)
+
+[11] “Installing the Postgres LTREE Extension”. Pat Shaughnessy.
+http://patshaughnessy.net/2017/12/12/installing-the-postgres-ltree-extension
+(retrieved 3/02/2021)
+
+[12] “Managing Hierarchical Data in MySQL Using the Adjacency List Model”. Mysqltutorial.
+https://www.mysqltutorial.org/mysql-adjacency-list-tree/
+(retrieved 17/01/2021)
+
+[13] “Managing Hierarchical Data in MySQL”. Mike Hillyer’s Personal Webspace.
+http://mikehillyer.com/articles/managing-hierarchical-data-in-mysql/
+(retrieved 29/12/2020)
+
+[14] “PostgreSQL-retrieve all IDs in a tree for a given subnode”. Stackexchange.
+https://dba.stackexchange.com/questions/224871/postgresql-retrieve-all-ids-in-a-tree-for-a-given-subnode
+(retrieved 12/01/2021)
+
+[15] “Saving a Tree in Postgres Using LTREE”. Pat Shaughnessy.
+http://patshaughnessy.net/2017/12/13/saving-a-tree-in-postgres-using-ltree
+(retrieved 05/02/2021)
+
+[16] “Trying to Represent a Tree Structure Using Postgres”. Pat Shaughnessy.
+http://patshaughnessy.net/2017/12/11/trying-to-represent-a-tree-structure-using-postgres
+(retrieved 25/12/2020)
+
+[17] “XML Functions”. Documentation /PostgreSQL13.
+https://www.postgresql.org/docs/current/functions-xml.html
+(retrieved 10/01/2021)
+
+
+
